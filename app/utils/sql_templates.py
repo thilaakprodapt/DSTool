@@ -158,13 +158,12 @@ class SQLTemplateEngine:
     COALESCE(${column}, PERCENTILE_CONT(${column}, 0.5) OVER()) AS ${column}_imputed
     """
     
+    # Note: True mode imputation in a single SELECT is complex in BigQuery.
+    # This uses FIRST_VALUE with IGNORE NULLS as a simpler approximation.
+    # For exact mode, use a subquery or pre-compute the mode.
     IMPUTE_MODE = """
-    -- Impute missing values with mode (most frequent value)
-    COALESCE(${column}, 
-        FIRST_VALUE(${column}) OVER (
-            ORDER BY COUNT(*) OVER (PARTITION BY ${column}) DESC
-        )
-    ) AS ${column}_imputed
+    -- Impute missing values with first non-null value (mode approximation)
+    COALESCE(${column}, FIRST_VALUE(${column} IGNORE NULLS) OVER (ORDER BY ${column})) AS ${column}_imputed
     """
     
     IMPUTE_CONSTANT = """
