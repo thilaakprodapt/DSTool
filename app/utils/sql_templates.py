@@ -88,13 +88,13 @@ class SQLTemplateEngine:
     # =========================================================================
     
     LABEL_ENCODING = """
-    -- Label Encoding: convert categories to integers
-    DENSE_RANK() OVER (ORDER BY ${column}) - 1 AS ${column}_encoded
+    -- Label Encoding: convert categories to integers (NULL-safe)
+    DENSE_RANK() OVER (ORDER BY CAST(${column} AS STRING) NULLS LAST) - 1 AS ${column}_encoded
     """
     
     FREQUENCY_ENCODING = """
-    -- Frequency Encoding: replace category with its frequency
-    COUNT(*) OVER (PARTITION BY ${column}) AS ${column}_freq
+    -- Frequency Encoding: replace category with its frequency (NULL-safe)
+    COUNT(*) OVER (PARTITION BY CAST(${column} AS STRING)) AS ${column}_freq
     """
     
     TARGET_ENCODING = """
@@ -104,9 +104,13 @@ class SQLTemplateEngine:
     
     # Note: True one-hot encoding requires knowing unique values beforehand.
     # This is a simplified binary encoding for binary columns.
+    # Cast to STRING to handle both BOOL and STRING column types.
     BINARY_ENCODING = """
-    -- Binary Encoding: convert to 0/1
-    CASE WHEN ${column} = '${positive_value}' THEN 1 ELSE 0 END AS ${column}_binary
+    -- Binary Encoding: convert to 0/1 (handles both BOOL and STRING)
+    CASE 
+        WHEN CAST(${column} AS STRING) IN ('Yes', 'yes', 'YES', 'true', 'True', 'TRUE', '1') THEN 1 
+        ELSE 0 
+    END AS ${column}_binary
     """
     
     # Hash encoding for high-cardinality categoricals
@@ -120,28 +124,28 @@ class SQLTemplateEngine:
     # =========================================================================
     
     LOWERCASE = """
-    -- Convert to lowercase
-    LOWER(${column}) AS ${column}_lower
+    -- Convert to lowercase (handles any type)
+    LOWER(CAST(${column} AS STRING)) AS ${column}_lower
     """
     
     UPPERCASE = """
-    -- Convert to uppercase
-    UPPER(${column}) AS ${column}_upper
+    -- Convert to uppercase (handles any type)
+    UPPER(CAST(${column} AS STRING)) AS ${column}_upper
     """
     
     TRIM = """
-    -- Trim whitespace
-    TRIM(${column}) AS ${column}_trimmed
+    -- Trim whitespace (handles any type)
+    TRIM(CAST(${column} AS STRING)) AS ${column}_trimmed
     """
     
     STRING_LENGTH = """
-    -- Get string length
-    LENGTH(${column}) AS ${column}_length
+    -- Get string length (handles any type)
+    LENGTH(CAST(${column} AS STRING)) AS ${column}_length
     """
     
     EXTRACT_NUMBERS = """
-    -- Extract first number from string
-    SAFE_CAST(REGEXP_EXTRACT(${column}, r'[0-9]+') AS INT64) AS ${column}_number
+    -- Extract first number from string (handles any type)
+    SAFE_CAST(REGEXP_EXTRACT(CAST(${column} AS STRING), r'[0-9]+') AS INT64) AS ${column}_number
     """
     
     # =========================================================================
@@ -162,8 +166,8 @@ class SQLTemplateEngine:
     # This uses FIRST_VALUE with IGNORE NULLS as a simpler approximation.
     # For exact mode, use a subquery or pre-compute the mode.
     IMPUTE_MODE = """
-    -- Impute missing values with first non-null value (mode approximation)
-    COALESCE(${column}, FIRST_VALUE(${column} IGNORE NULLS) OVER (ORDER BY ${column})) AS ${column}_imputed
+    -- Impute missing values with first non-null value (mode approximation, type-safe)
+    COALESCE(${column}, FIRST_VALUE(${column} IGNORE NULLS) OVER (ORDER BY CAST(${column} AS STRING) NULLS LAST)) AS ${column}_imputed
     """
     
     IMPUTE_CONSTANT = """
