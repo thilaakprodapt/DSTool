@@ -88,8 +88,8 @@ class SQLTemplateEngine:
     # =========================================================================
     
     LABEL_ENCODING = """
-    -- Label Encoding: convert categories to integers (NULL-safe)
-    DENSE_RANK() OVER (ORDER BY CAST(${column} AS STRING) NULLS LAST) - 1 AS ${column}_encoded
+    -- Label Encoding: convert categories to integers
+    DENSE_RANK() OVER (ORDER BY COALESCE(CAST(${column} AS STRING), '')) - 1 AS ${column}_encoded
     """
     
     FREQUENCY_ENCODING = """
@@ -163,11 +163,10 @@ class SQLTemplateEngine:
     """
     
     # Note: True mode imputation in a single SELECT is complex in BigQuery.
-    # This uses FIRST_VALUE with IGNORE NULLS as a simpler approximation.
-    # For exact mode, use a subquery or pre-compute the mode.
+    # Using FIRST_VALUE with a simple partition - fills NULLs with first non-null value.
     IMPUTE_MODE = """
-    -- Impute missing values with first non-null value (mode approximation, type-safe)
-    COALESCE(${column}, FIRST_VALUE(${column} IGNORE NULLS) OVER (ORDER BY CAST(${column} AS STRING) NULLS LAST)) AS ${column}_imputed
+    -- Impute missing values with first non-null value (mode approximation)
+    COALESCE(${column}, FIRST_VALUE(${column} IGNORE NULLS) OVER (ORDER BY 1 ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)) AS ${column}_imputed
     """
     
     IMPUTE_CONSTANT = """
