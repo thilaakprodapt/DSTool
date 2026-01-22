@@ -51,6 +51,7 @@ async def generate_dag_service(input: dict):
         source_table = input.get("source_table")
         target_dataset = input.get("target_dataset")
         transformations = input.get("transformation", [])
+        target_column = input.get("target_column")  # Optional: specify target/label column
         
         # Validate required fields
         if not all([project_id, dataset_id, source_table, target_dataset, transformations]):
@@ -63,7 +64,8 @@ async def generate_dag_service(input: dict):
                 dataset_id=dataset_id,
                 source_table=source_table,
                 target_dataset=target_dataset,
-                transformations=transformations
+                transformations=transformations,
+                target_column=target_column
             )
             result["generation_method"] = "template"
             result["input_data"] = input
@@ -95,12 +97,17 @@ def _generate_dag_with_templates(
     dataset_id: str,
     source_table: str,
     target_dataset: str,
-    transformations: list
+    transformations: list,
+    target_column: str = None
 ) -> dict:
     """
-    Generate DAG using the SQL template system.
+    Generate ML-ready DAG using the SQL template system.
     
-    This function uses pre-validated SQL templates for common transformations.
+    Features:
+    - Chains transformations (impute → encode)
+    - Outputs only final columns with suffixes
+    - No NULLs in output
+    - All features numeric (ML-ready)
     """
     # Initialize the DAG generator
     generator = DAGGenerator(
@@ -110,10 +117,10 @@ def _generate_dag_with_templates(
         target_dataset=target_dataset
     )
     
-    # Generate the DAG
+    # Generate the DAG with chained transformations
     result = generator.generate(
         transformations=transformations,
-        use_single_query=True  # Combine all transformations into one efficient query
+        target_column=target_column
     )
     
     if result.get("status") != "success":
