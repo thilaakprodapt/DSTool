@@ -352,20 +352,29 @@ with DAG(
                 "transformations": [t.get("fe_method") for t in transforms]
             })
         
-        # Handle target column
+        # Handle target column - ALWAYS encode for ML-ready output
         if target_column and include_target:
-            # Check if target has transformations
+            # Check if target has explicit transformations
             if target_column in grouped:
+                # Use user-specified transformations
                 expr, output_name = self._render_chained_expression(target_column, grouped[target_column])
                 select_expressions.append(f"    {expr} AS target")
+                column_metadata.append({
+                    "original_column": target_column,
+                    "output_column": "target",
+                    "transformations": [t.get("fe_method") for t in grouped[target_column]]
+                })
             else:
-                # Keep target as-is
-                select_expressions.append(f"    {target_column} AS target")
-            column_metadata.append({
-                "original_column": target_column,
-                "output_column": "target",
-                "transformations": ["target_column"]
-            })
+                # Auto-encode target to 0/1 for ML-ready output
+                # Binary encoding: common values like Yes/No, True/False, 1/0 → 1, else → 0
+                target_expr = f"CASE WHEN CAST({target_column} AS STRING) IN ('1', 'Yes', 'yes', 'YES', 'true', 'True', 'TRUE') THEN 1 ELSE 0 END"
+                select_expressions.append(f"    {target_expr} AS target")
+                column_metadata.append({
+                    "original_column": target_column,
+                    "output_column": "target",
+                    "transformations": ["auto_binary_encoding"],
+                    "note": "Target auto-encoded to 0/1 for ML-ready output"
+                })
         
         # Build complete SQL
         target_full = f"`{self.project_id}.{self.target_dataset}.{self.target_table}`"
